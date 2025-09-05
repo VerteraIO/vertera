@@ -1,0 +1,54 @@
+syntax = "proto3";
+package vertera.v1;
+
+option go_package = "github.com/VerteraIO/vertera/api/proto/v1;verterapb";
+
+// Task types the controller can assign to agents
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_INSTALL_PACKAGES = 1;
+}
+
+message InstallPackagesParams {
+  repeated string packages = 1; // e.g., ["ovs", "cloud-hypervisor"]
+  string version = 2;           // optional
+  string os_version = 3;        // optional (e.g., "el9")
+}
+
+message Task {
+  string id = 1;
+  string host_id = 2;
+  TaskType type = 3;
+  bytes params = 4; // Marshaled InstallPackagesParams for now
+}
+
+message TaskAck {
+  string id = 1;
+}
+
+message TaskResult {
+  string id = 1;
+  string status = 2; // queued, running, succeeded, failed
+  string error = 3;  // non-empty when failed
+  string logs = 4;   // optional inline logs snippet
+}
+
+message RegisterRequest {
+  string agent_id = 1;
+  string hostname = 2;
+}
+
+message RegisterResponse {
+  string assigned_id = 1;
+}
+
+service AgentService {
+  // Simple registration (we will replace with mTLS later)
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Controller streams tasks to agent; the agent acks receipt of each task.
+  rpc WatchTasks(RegisterRequest) returns (stream Task);
+
+  // Agent reports the result of a task
+  rpc ReportTaskResult(TaskResult) returns (TaskAck);
+}

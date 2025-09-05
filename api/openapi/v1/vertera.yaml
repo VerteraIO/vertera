@@ -1,0 +1,931 @@
+openapi: 3.1.0
+info:
+  title: Vertera Public API
+  version: 1.0.0
+  description: |
+    Vertera REST API v1. All endpoints are prefixed with /api/v1.
+    Authentication: OIDC Bearer tokens (JWT). Agents use mTLS gRPC, not this API.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Projects
+  - name: Clusters
+  - name: DVS
+  - name: Hosts
+  - name: Networks
+  - name: Artifacts
+  - name: VMs
+  - name: Inventory
+  - name: Drift
+  - name: Tasks
+  - name: Tokens
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: healthz
+      responses:
+        '200': { description: OK }
+
+  /auth/oidc/login:
+    get:
+      tags: [Auth]
+      summary: Begin OIDC login (PKCE)
+      operationId: startOidcLogin
+      responses:
+        '302': { description: Redirect to IdP }
+  /auth/oidc/callback:
+    get:
+      tags: [Auth]
+      summary: OIDC callback
+      operationId: oidcCallback
+      responses:
+        '302': { description: Redirect to UI }
+
+  /projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      operationId: listProjects
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+
+  /agents/enroll/token:
+    post:
+      tags: [Agents]
+      summary: Issue a short-lived enrollment token (HS256-signed)
+      operationId: createEnrollToken
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnrollTokenRequest' }
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnrollTokenResponse' }
+
+  /agents/enroll/csr:
+    post:
+      tags: [Agents]
+      summary: Submit a CSR and receive a signed client certificate
+      operationId: signAgentCSR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CsrSignRequest' }
+      responses:
+        '200':
+          description: Signed certificate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsrSignResponse' }
+
+  /projects/{projectId}:
+    parameters:
+      - $ref: '#/components/parameters/projectId'
+    get:
+      tags: [Projects]
+      summary: Get project
+      operationId: getProject
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+    delete:
+      tags: [Projects]
+      summary: Delete project
+      operationId: deleteProject
+      responses:
+        '204': { description: Deleted }
+
+  /clusters:
+    get:
+      tags: [Clusters]
+      summary: List clusters
+      operationId: listClusters
+      parameters:
+        - $ref: '#/components/parameters/project'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClusterList' }
+    post:
+      tags: [Clusters]
+      summary: Create cluster
+      operationId: createCluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClusterCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cluster' }
+
+  /clusters/{clusterId}:
+    parameters:
+      - $ref: '#/components/parameters/clusterId'
+    get:
+      tags: [Clusters]
+      summary: Get cluster
+      operationId: getCluster
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cluster' }
+    delete:
+      tags: [Clusters]
+      summary: Delete cluster
+      operationId: deleteCluster
+      responses:
+        '204': { description: Deleted }
+
+  /clusters/{clusterId}/members:
+    parameters:
+      - $ref: '#/components/parameters/clusterId'
+    get:
+      tags: [Clusters]
+      summary: List cluster members
+      operationId: listClusterMembers
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HostList' }
+    post:
+      tags: [Clusters]
+      summary: Add host to cluster
+      operationId: addHostToCluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostId]
+              properties:
+                hostId: { type: string, format: uuid }
+      responses:
+        '204': { description: Added }
+    delete:
+      tags: [Clusters]
+      summary: Remove host from cluster
+      operationId: removeHostFromCluster
+      parameters:
+        - in: query
+          name: hostId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Removed }
+
+  /dvs:
+    get:
+      tags: [DVS]
+      summary: List distributed switches
+      operationId: listDvs
+      parameters:
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DvsList' }
+    post:
+      tags: [DVS]
+      summary: Create distributed switch
+      operationId: createDvs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DvsCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dvs' }
+
+  /dvs/{dvsId}:
+    parameters:
+      - $ref: '#/components/parameters/dvsId'
+    get:
+      tags: [DVS]
+      summary: Get distributed switch
+      operationId: getDvs
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dvs' }
+    patch:
+      tags: [DVS]
+      summary: Update distributed switch (bumps revision)
+      operationId: updateDvs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DvsUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dvs' }
+
+  /dvs/{dvsId}/port-groups:
+    parameters:
+      - $ref: '#/components/parameters/dvsId'
+    get:
+      tags: [DVS]
+      summary: List DVS port groups
+      operationId: listDvpg
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DvsPortGroupList' }
+    post:
+      tags: [DVS]
+      summary: Create DVS port group
+      operationId: createDvpg
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DvsPortGroupCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DvsPortGroup' }
+
+  /hosts:
+    get:
+      tags: [Hosts]
+      summary: List hosts
+      operationId: listHosts
+      parameters:
+        - $ref: '#/components/parameters/project'
+        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HostList' }
+    post:
+      tags: [Hosts]
+      summary: Register host (control-plane created)
+      operationId: createHost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HostCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Host' }
+
+  /hosts/{hostId}:
+    parameters:
+      - $ref: '#/components/parameters/hostId'
+    get:
+      tags: [Hosts]
+      summary: Get host
+      operationId: getHost
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Host' }
+    delete:
+      tags: [Hosts]
+      summary: Evict host
+      operationId: deleteHost
+      responses:
+        '204': { description: Deleted }
+
+  /hosts/{hostId}/uplinks:
+    put:
+      tags: [Hosts, DVS]
+      summary: Set logical uplink mapping for a DVS
+      operationId: setHostUplinks
+      parameters:
+        - $ref: '#/components/parameters/hostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HostUplinkMapSet' }
+      responses:
+        '204': { description: Updated }
+
+  /hosts/{hostId}/packages/install:
+    post:
+      tags: [Hosts]
+      summary: Install packages (OVS/CH)
+      operationId: installPackages
+      parameters:
+        - $ref: '#/components/parameters/hostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PackageInstallRequest' }
+      responses:
+        '202':
+          description: Task accepted
+          headers:
+            Location:
+              description: URL to poll task status
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+
+  /hosts/{hostId}/inventory/latest:
+    get:
+      tags: [Inventory]
+      summary: Get latest inventory snapshot
+      operationId: getLatestInventory
+      parameters:
+        - $ref: '#/components/parameters/hostId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Inventory' }
+  /hosts/{hostId}/inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory snapshots
+      operationId: listInventory
+      parameters:
+        - $ref: '#/components/parameters/hostId'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryList' }
+  /hosts/{hostId}/refresh-inventory:
+    post:
+      tags: [Inventory]
+      summary: Request immediate inventory collection
+      operationId: refreshInventory
+      parameters:
+        - $ref: '#/components/parameters/hostId'
+      responses:
+        '202': { description: Task accepted }
+
+  /hosts/{hostId}/drift:
+    get:
+      tags: [Drift]
+      summary: Get latest drift diff
+      operationId: getDrift
+      parameters:
+        - $ref: '#/components/parameters/hostId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drift' }
+
+  /artifacts:
+    get:
+      tags: [Artifacts]
+      summary: List artifacts
+      operationId: listArtifacts
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [ovs, cloud-hypervisor, firmware, agent] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactList' }
+
+  /vms:
+    post:
+      tags: [VMs]
+      summary: Create VM
+      operationId: createVm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VmCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vm' }
+  /vms/{vmId}:
+    parameters:
+      - $ref: '#/components/parameters/vmId'
+    get:
+      tags: [VMs]
+      summary: Get VM
+      operationId: getVm
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vm' }
+    delete:
+      tags: [VMs]
+      summary: Delete VM
+      operationId: deleteVm
+      responses:
+        '204': { description: Deleted }
+  /vms/{vmId}/actions/power:
+    post:
+      tags: [VMs]
+      summary: Power action
+      operationId: powerVm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                op: { type: string, enum: [on, off, reboot] }
+      responses:
+        '202': { description: Task accepted }
+  /vms/{vmId}/actions/migrate:
+    post:
+      tags: [VMs]
+      summary: Live migrate VM
+      operationId: migrateVm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetHostId: { type: string, format: uuid }
+      responses:
+        '202': { description: Task accepted }
+
+  /tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/taskId'
+    get:
+      tags: [Tasks]
+      summary: Get task
+      operationId: getTask
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+
+  /tokens/enroll:
+    post:
+      tags: [Tokens]
+      summary: Create a short-lived seed enrollment token
+      operationId: createEnrollToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnrollTokenCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnrollToken' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    page:
+      in: query
+      name: page
+      schema: { type: integer, minimum: 1, default: 1 }
+    pageSize:
+      in: query
+      name: pageSize
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    project:
+      in: query
+      name: projectId
+      schema: { type: string, format: uuid }
+    cluster:
+      in: query
+      name: clusterId
+      schema: { type: string, format: uuid }
+    projectId:
+      in: path
+      name: projectId
+      required: true
+      schema: { type: string, format: uuid }
+    clusterId:
+      in: path
+      name: clusterId
+      required: true
+      schema: { type: string, format: uuid }
+    dvsId:
+      in: path
+      name: dvsId
+      required: true
+      schema: { type: string, format: uuid }
+    hostId:
+      in: path
+      name: hostId
+      required: true
+      schema: { type: string, format: uuid }
+    vmId:
+      in: path
+      name: vmId
+      required: true
+      schema: { type: string, format: uuid }
+    taskId:
+      in: path
+      name: taskId
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+
+    PageMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+    ProjectList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Project' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    Cluster:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    ClusterCreate:
+      type: object
+      required: [projectId, name]
+      properties:
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+    ClusterList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Cluster' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    Dvs:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        clusterId: { type: string, format: uuid }
+        name: { type: string }
+        mtu: { type: integer }
+        lacpMode: { type: string, enum: [active, passive, off] }
+        uplinks: { type: integer, minimum: 1, maximum: 8 }
+        revision: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DvsCreate:
+      type: object
+      required: [clusterId, name]
+      properties:
+        clusterId: { type: string, format: uuid }
+        name: { type: string }
+        mtu: { type: integer, default: 1500 }
+        lacpMode: { type: string, enum: [active, passive, off], default: passive }
+        uplinks: { type: integer, default: 2 }
+    DvsUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        mtu: { type: integer }
+        lacpMode: { type: string, enum: [active, passive, off] }
+        uplinks: { type: integer, minimum: 1, maximum: 8 }
+    DvsList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Dvs' }
+
+    DvsPortGroup:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        dvsId: { type: string, format: uuid }
+        name: { type: string }
+        vlanMode: { type: string, enum: [access, trunk] }
+        vlanId: { type: integer, minimum: 1, maximum: 4094, nullable: true }
+        trunkAllowed:
+          type: array
+          items:
+            type: string
+            description: VLAN ranges, e.g. "100-120"
+        policies: { type: object, additionalProperties: true }
+    DvsPortGroupCreate:
+      type: object
+      required: [dvsId, name, vlanMode]
+      properties:
+        dvsId: { type: string, format: uuid }
+        name: { type: string }
+        vlanMode: { type: string, enum: [access, trunk] }
+        vlanId: { type: integer, minimum: 1, maximum: 4094, nullable: true }
+        trunkAllowed:
+          type: array
+          items: { type: string }
+        policies: { type: object, additionalProperties: true }
+    DvsPortGroupList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DvsPortGroup' }
+
+    Host:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        clusterId: { type: string, format: uuid, nullable: true }
+        hostname: { type: string }
+        state: { type: string, enum: [enrolled, ready, draining, error] }
+        elVersion: { type: string, nullable: true }
+        chVersion: { type: string, nullable: true }
+        ovsVersion: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    HostCreate:
+      type: object
+      required: [projectId, hostname]
+      properties:
+        projectId: { type: string, format: uuid }
+        clusterId: { type: string, format: uuid, nullable: true }
+        hostname: { type: string }
+        labels: { type: object, additionalProperties: { type: string } }
+    HostList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Host' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    HostUplinkMapSet:
+      type: object
+      required: [dvsId, map]
+      properties:
+        dvsId: { type: string, format: uuid }
+        map:
+          type: array
+          items:
+            type: object
+            required: [logical, ifname]
+            properties:
+              logical: { type: integer, minimum: 1 }
+              ifname: { type: string }
+
+    PackageInstallRequest:
+      type: object
+      properties:
+        packages:
+          type: array
+          items: { type: string, enum: [ovs, cloud-hypervisor] }
+        version: { type: string }
+
+    Inventory:
+      type: object
+      properties:
+        cpu:
+          type: object
+          properties:
+            sockets: { type: integer }
+            cores: { type: integer }
+            threads: { type: integer }
+            model: { type: string }
+            flags: { type: array, items: { type: string } }
+        memory:
+          type: object
+          properties:
+            total: { type: integer, format: int64 }
+            hugepages: { type: object, additionalProperties: true }
+        kernel: { type: object, additionalProperties: true }
+        os: { type: object, additionalProperties: true }
+        versions: { type: object, additionalProperties: { type: string } }
+        disks: { type: array, items: { type: object, additionalProperties: true } }
+        nics: { type: array, items: { type: object, additionalProperties: true } }
+        services: { type: object, additionalProperties: { type: string } }
+    InventoryList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Inventory' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    Drift:
+      type: object
+      properties:
+        desiredRevision: { type: integer }
+        collectedAt: { type: string, format: date-time }
+        diff: { type: object, additionalProperties: true }
+        status: { type: string, enum: [detected, ignored, remediated] }
+
+    Artifact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [ovs, cloud-hypervisor, firmware, agent] }
+        version: { type: string }
+        channel: { type: string, enum: [stable, candidate] }
+        digest: { type: string }
+        createdAt: { type: string, format: date-time }
+    ArtifactList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Artifact' }
+
+    Vm:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        hostId: { type: string, format: uuid }
+        name: { type: string }
+        vcpus: { type: integer }
+        memoryMiB: { type: integer }
+        nets: { type: array, items: { $ref: '#/components/schemas/VmNic' } }
+        disks: { type: array, items: { $ref: '#/components/schemas/VmDisk' } }
+        state: { type: string, enum: [creating, running, stopped, error] }
+    VmCreate:
+      type: object
+      required: [projectId, name, vcpus, memoryMiB]
+      properties:
+        projectId: { type: string, format: uuid }
+        hostId: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        vcpus: { type: integer, minimum: 1 }
+        memoryMiB: { type: integer, minimum: 128 }
+        nets: { type: array, items: { $ref: '#/components/schemas/VmNic' } }
+        disks: { type: array, items: { $ref: '#/components/schemas/VmDisk' } }
+    VmNic:
+      type: object
+      required: [portGroup]
+      properties:
+        portGroup: { type: string, description: DVS port group name }
+        macAddress: { type: string, nullable: true }
+    VmDisk:
+      type: object
+      required: [sizeGiB]
+      properties:
+        sizeGiB: { type: integer }
+        imageId: { type: string, format: uuid, nullable: true }
+
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        hostId: { type: string }
+        type: { type: string }
+        params: { type: object, additionalProperties: true }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        logs: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        error: { type: string, nullable: true }
+
+    EnrollTokenCreate:
+      type: object
+      required: [projectId]
+      properties:
+        projectId: { type: string, format: uuid }
+        siteId: { type: string, format: uuid, nullable: true }
+        os_version: { type: string, description: EL version, example: el9 }
+
+    EnrollTokenRequest:
+      type: object
+      properties:
+        ttl:
+          type: string
+          description: Token TTL in Go duration (e.g., 15m, 1h). Defaults to 15m.
+
+    EnrollTokenResponse:
+      type: object
+      properties:
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    CsrSignRequest:
+      type: object
+      required: [token, csr_pem]
+      properties:
+        token: { type: string }
+        csr_pem: { type: string, description: PEM-encoded PKCS#10 CSR }
+
+    CsrSignResponse:
+      type: object
+      properties:
+        cert_pem: { type: string, description: PEM-encoded X.509 certificate }
+
+    EnrollToken:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        token: { type: string, description: Signed JWT }
+        expiresAt: { type: string, format: date-time }
+        oneTime: { type: boolean, default: true }
+        useLimit: { type: integer, default: 1 }
+        constraints:
+          type: object
+          properties:
+            allowedCidrs: { type: array, items: { type: string } }
+            requireTpm: { type: boolean }
+            modelAllowlist: { type: array, items: { type: string } }
