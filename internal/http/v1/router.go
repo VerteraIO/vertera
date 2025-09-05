@@ -6,16 +6,18 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
 	openapi "github.com/VerteraIO/vertera/api/openapi"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // Router returns the chi.Router for REST API v1.
 func Router() chi.Router {
 	r := chi.NewRouter()
 
-	// Docs and spec under the versioned prefix
-	r.Get("/docs", serveScalarUI)
+	// Docs (Swagger UI) and spec under the versioned prefix
+	r.Get("/docs/*", httpSwagger.Handler(
+		httpSwagger.URL("/api/v1/openapi.yaml"), // point Swagger UI at our embedded OpenAPI spec
+	))
 	r.Get("/openapi.yaml", serveOpenAPIStaticAsset)
 
 	// Package management endpoints
@@ -33,30 +35,6 @@ func Router() chi.Router {
 	r.Get("/projects", listProjects)
 
 	return r
-}
-
-func serveScalarUI(w http.ResponseWriter, r *http.Request) {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	specURL := fmt.Sprintf("%s://%s/api/v1/openapi.yaml", scheme, r.Host)
-	htmlContent, err := scalar.ApiReferenceHTML(&scalar.Options{
-		SpecURL: specURL,
-		CustomOptions: scalar.CustomOptions{
-			PageTitle: "Vertera API v1",
-		},
-		DarkMode: false,
-	})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to render docs: %v", err), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := fmt.Fprintln(w, htmlContent); err != nil {
-		http.Error(w, fmt.Sprintf("failed to write response: %v", err), http.StatusInternalServerError)
-		return
-	}
 }
 
 func serveOpenAPIStaticAsset(w http.ResponseWriter, r *http.Request) {

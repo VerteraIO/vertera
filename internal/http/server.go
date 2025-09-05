@@ -1,14 +1,12 @@
 package httpserver
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
 	v1 "github.com/VerteraIO/vertera/internal/http/v1"
 )
 
@@ -23,7 +21,7 @@ func NewServer() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// Root-level docs for latest GA (v1 for now)
+	// Root-level docs: redirect to Swagger UI for v1
 	r.Get("/docs", serveRootDocs)
 
 	// Default 404: nudge callers toward versioned paths
@@ -64,23 +62,6 @@ func Deprecation(deprecated string, sunsetISO string, successorLink string) func
 // serveRootDocs renders Scalar UI for the latest GA API version.
 // Today this points to the v1 OpenAPI document.
 func serveRootDocs(w http.ResponseWriter, r *http.Request) {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	specURL := fmt.Sprintf("%s://%s/api/v1/openapi.yaml", scheme, r.Host)
-
-	htmlContent, err := scalar.ApiReferenceHTML(&scalar.Options{
-		SpecURL: specURL,
-		CustomOptions: scalar.CustomOptions{
-			PageTitle: "Vertera API (GA)",
-		},
-		DarkMode: false,
-	})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to render docs: %v", err), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(htmlContent))
+	// Redirect to the versioned Swagger UI
+	http.Redirect(w, r, "/api/v1/docs/index.html", http.StatusFound)
 }
